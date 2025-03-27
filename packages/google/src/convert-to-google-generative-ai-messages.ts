@@ -1,16 +1,16 @@
 import {
   LanguageModelV1Prompt,
   UnsupportedFunctionalityError,
-} from '@ai-sdk/provider';
-import { convertUint8ArrayToBase64 } from '@ai-sdk/provider-utils';
+} from "@ai-sdk/provider";
+import { convertUint8ArrayToBase64 } from "@ai-sdk/provider-utils";
 import {
   GoogleGenerativeAIContent,
   GoogleGenerativeAIContentPart,
   GoogleGenerativeAIPrompt,
-} from './google-generative-ai-prompt';
+} from "./google-generative-ai-prompt";
 
 export function convertToGoogleGenerativeAIMessages(
-  prompt: LanguageModelV1Prompt,
+  prompt: LanguageModelV1Prompt
 ): GoogleGenerativeAIPrompt {
   const systemInstructionParts: Array<{ text: string }> = [];
   const contents: Array<GoogleGenerativeAIContent> = [];
@@ -18,11 +18,11 @@ export function convertToGoogleGenerativeAIMessages(
 
   for (const { role, content } of prompt) {
     switch (role) {
-      case 'system': {
+      case "system": {
         if (!systemMessagesAllowed) {
           throw new UnsupportedFunctionalityError({
             functionality:
-              'system messages are only supported at the beginning of the conversation',
+              "system messages are only supported at the beginning of the conversation",
           });
         }
 
@@ -30,39 +30,39 @@ export function convertToGoogleGenerativeAIMessages(
         break;
       }
 
-      case 'user': {
+      case "user": {
         systemMessagesAllowed = false;
 
         const parts: GoogleGenerativeAIContentPart[] = [];
 
         for (const part of content) {
           switch (part.type) {
-            case 'text': {
+            case "text": {
               parts.push({ text: part.text });
               break;
             }
 
-            case 'image': {
+            case "image": {
               parts.push(
                 part.image instanceof URL
                   ? {
                       fileData: {
-                        mimeType: part.mimeType ?? 'image/jpeg',
+                        mimeType: part.mimeType ?? "image/jpeg",
                         fileUri: part.image.toString(),
                       },
                     }
                   : {
                       inlineData: {
-                        mimeType: part.mimeType ?? 'image/jpeg',
+                        mimeType: part.mimeType ?? "image/jpeg",
                         data: convertUint8ArrayToBase64(part.image),
                       },
-                    },
+                    }
               );
 
               break;
             }
 
-            case 'file': {
+            case "file": {
               parts.push(
                 part.data instanceof URL
                   ? {
@@ -76,44 +76,64 @@ export function convertToGoogleGenerativeAIMessages(
                         mimeType: part.mimeType,
                         data: part.data,
                       },
-                    },
+                    }
               );
 
+              break;
+            }
+
+            // New case for video
+            case "video": {
+              parts.push(
+                part.data instanceof URL
+                  ? {
+                      fileData: {
+                        mimeType: part.mimeType ?? "video/*",
+                        fileUri: part.data.toString(),
+                      },
+                    }
+                  : {
+                      inlineData: {
+                        mimeType: part.mimeType ?? "video/*",
+                        data: convertUint8ArrayToBase64(part.data),
+                      },
+                    }
+              );
               break;
             }
           }
         }
 
-        contents.push({ role: 'user', parts });
+        contents.push({ role: "user", parts });
         break;
       }
 
-      case 'assistant': {
+      case "assistant": {
         systemMessagesAllowed = false;
 
         contents.push({
-          role: 'model',
+          role: "model",
           parts: content
-            .map(part => {
+            .map((part) => {
               switch (part.type) {
-                case 'text': {
+                case "text": {
                   return part.text.length === 0
                     ? undefined
                     : { text: part.text };
                 }
 
-                case 'file': {
-                  if (part.mimeType !== 'image/png') {
+                case "file": {
+                  if (part.mimeType !== "image/png") {
                     throw new UnsupportedFunctionalityError({
                       functionality:
-                        'Only PNG images are supported in assistant messages',
+                        "Only PNG images are supported in assistant messages",
                     });
                   }
 
                   if (part.data instanceof URL) {
                     throw new UnsupportedFunctionalityError({
                       functionality:
-                        'File data URLs in assistant messages are not supported',
+                        "File data URLs in assistant messages are not supported",
                     });
                   }
 
@@ -125,7 +145,7 @@ export function convertToGoogleGenerativeAIMessages(
                   };
                 }
 
-                case 'tool-call': {
+                case "tool-call": {
                   return {
                     functionCall: {
                       name: part.toolName,
@@ -135,17 +155,17 @@ export function convertToGoogleGenerativeAIMessages(
                 }
               }
             })
-            .filter(part => part !== undefined),
+            .filter((part) => part !== undefined),
         });
         break;
       }
 
-      case 'tool': {
+      case "tool": {
         systemMessagesAllowed = false;
 
         contents.push({
-          role: 'user',
-          parts: content.map(part => ({
+          role: "user",
+          parts: content.map((part) => ({
             functionResponse: {
               name: part.toolName,
               response: {
